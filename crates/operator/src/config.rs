@@ -64,7 +64,7 @@ pub struct PeersConfig {
     pub pubkeys: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct BitcoindConfig {
     pub rpc_url: String,
     pub rpc_user: String,

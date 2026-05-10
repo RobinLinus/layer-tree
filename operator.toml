@@ -17,11 +17,10 @@ pubkeys = []
 [database]
 path = "./layer_tree.db"
 
-# Uncomment to enable chain monitoring
-# [bitcoind]
-# rpc_url = "http://127.0.0.1:18443"
-# rpc_user = "rpcuser"
-# rpc_pass = "rpcpassword"
+[bitcoind]
+rpc_url = "http://127.0.0.1:18443"
+rpc_user = "rpcuser"
+rpc_pass = "rpcpassword"
 
 # Protocol params (defaults to regtest values if omitted)
 # [params]

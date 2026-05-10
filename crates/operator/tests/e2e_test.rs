@@ -95,6 +95,7 @@ path = "{}"
         poll_interval: Duration::from_millis(500), // fast for tests
         min_pending_changes: 1,
         peer_urls: vec![],
+        bitcoind: None,
     };
     tokio::spawn(state_driver::run_state_driver(
         driver_coordinator,

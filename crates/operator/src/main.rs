@@ -266,6 +266,7 @@ async fn main() {
         poll_interval: std::time::Duration::from_secs(5),
         min_pending_changes: 1,
         peer_urls: state.config.peers.urls.clone(),
+        bitcoind: state.config.bitcoind.clone(),
     };
     tokio::spawn(state_driver::run_state_driver(
         driver_coordinator,

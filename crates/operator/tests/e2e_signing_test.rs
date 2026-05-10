@@ -83,6 +83,7 @@ async fn test_state_driver_signs_with_funded_users() {
         poll_interval: Duration::from_millis(100),
         min_pending_changes: 1,
         peer_urls: vec![],
+        bitcoind: None,
     };
 
     let driver_handle = tokio::spawn(state_driver::run_state_driver(

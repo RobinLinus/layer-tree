@@ -15,8 +15,10 @@ use musig2::BinaryEncoding;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
+use bitcoincore_rpc::{Auth, Client as RpcClient, RpcApi};
 use layer_tree_core::transactions::{DepositInput, WithdrawalOutput};
 
+use crate::config::BitcoindConfig;
 use crate::peer_service::{
     AllocationMsg, DepositInputMsg, PeerClient, ProposeRefreshReq, ProposeStateReq,
     SharedChainState, SignerNoncesMsg, SignerPartialSigsMsg, SubmitNoncesReq,
@@ -32,6 +34,8 @@ pub struct StateDriverConfig {
     pub min_pending_changes: usize,
     /// Peer URLs for multi-operator coordination.
     pub peer_urls: Vec<String>,
+    /// Bitcoind config for broadcasting refresh TXs.
+    pub bitcoind: Option<BitcoindConfig>,
 }
 
 /// Run the state driver loop.
@@ -393,6 +397,7 @@ pub async fn run_state_driver(
                     &peer_clients,
                     &pending_withdrawals,
                     n_signers,
+                    &config.bitcoind,
                 )
                 .await
                 {
@@ -416,6 +421,7 @@ async fn run_refresh_round(
     peer_clients: &[PeerClient],
     pending_withdrawals: &[(i64, String, i64, String)],
     n_signers: usize,
+    bitcoind_config: &Option<BitcoindConfig>,
 ) -> Result<(), String> {
     // Build withdrawal outputs
     let withdrawals: Vec<WithdrawalOutput> = pending_withdrawals
@@ -653,6 +659,38 @@ async fn run_refresh_round(
 
         info!("Refresh TX ready for broadcast: {}", &refresh_tx_hex[..64]);
 
+        // Broadcast via bitcoind
+        if let Some(btc_config) = bitcoind_config {
+            match RpcClient::new(
+                &btc_config.rpc_url,
+                Auth::UserPass(btc_config.rpc_user.clone(), btc_config.rpc_pass.clone()),
+            ) {
+                Ok(rpc) => {
+                    let raw_bytes = hex_decode(&refresh_tx_hex)
+                        .map_err(|e| format!("hex decode: {e}"))?;
+                    let tx: bitcoin::Transaction =
+                        bitcoin::consensus::encode::deserialize(&raw_bytes)
+                            .map_err(|e| format!("deserialize tx: {e}"))?;
+
+                    match rpc.send_raw_transaction(&tx) {
+                        Ok(txid) => {
+                            info!("Refresh TX broadcast: {txid}");
+                        }
+                        Err(e) => {
+                            error!("Failed to broadcast refresh TX: {e}");
+                            return Err(format!("broadcast failed: {e}"));
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to connect to bitcoind for broadcast: {e}");
+                    return Err(format!("bitcoind connection failed: {e}"));
+                }
+            }
+        } else {
+            warn!("No bitcoind configured — refresh TX not broadcast");
+        }
+
         // Mark withdrawals as included
         let withdrawal_ids: Vec<i64> = pending_withdrawals.iter().map(|(id, _, _, _)| *id).collect();
         let db_conn = db.lock().await;
@@ -660,10 +698,8 @@ async fn run_refresh_round(
             error!("Failed to mark withdrawals as included: {e}");
         }
 
-        // Store refresh TX for later broadcast (when bitcoind is available)
-        // TODO: broadcast via bitcoind RPC if connected
         info!(
-            "Refresh TX stored, {} withdrawals marked as included",
+            "Refresh complete, {} withdrawals included",
             withdrawal_ids.len()
         );
 
