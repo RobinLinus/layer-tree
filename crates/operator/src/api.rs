@@ -397,8 +397,10 @@ async fn set_epoch(
     })))
 }
 
-/// POST /api/admin/credit — regtest faucet: create a DepositConfirm operation
-/// that goes through the block producer, so it's persisted in the chain.
+/// POST /api/admin/credit — regtest faucet.
+///
+/// Flow: mine a block → send BTC to pool → consolidate pool UTXO → credit user.
+/// This creates real on-chain backing for the L2 balance.
 #[derive(serde::Deserialize)]
 struct CreditReq {
     pubkey: String,
@@ -414,7 +416,7 @@ async fn credit(
         return Err(code);
     }
 
-    let pk = match parse_xonly(&req.pubkey) {
+    let user_pk = match parse_xonly(&req.pubkey) {
         Ok(pk) => pk,
         Err(e) => {
             return Ok(Json(serde_json::json!({
@@ -431,30 +433,230 @@ async fn credit(
         })));
     }
 
-    // Create a fake outpoint for the faucet deposit (unique per call)
-    let fake_txid = {
-        use bitcoin::hashes::{sha256, Hash};
-        let seed = format!("faucet:{}:{}", req.pubkey, std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos());
-        let hash = sha256::Hash::hash(seed.as_bytes());
-        bitcoin::Txid::from_byte_array(hash.to_byte_array())
+    // Require bitcoind
+    let btc_config = match &state.config.bitcoind {
+        Some(c) => c.clone(),
+        None => {
+            return Ok(Json(serde_json::json!({
+                "status": "error",
+                "message": "bitcoind not configured — faucet requires a running bitcoin node",
+            })));
+        }
     };
-    let outpoint = bitcoin::OutPoint::new(fake_txid, 0);
 
-    let op = layer_tree_core::blockchain::Operation::DepositConfirm {
-        pubkey: pk,
+    let rpc = match bitcoincore_rpc::Client::new(
+        &btc_config.rpc_url,
+        bitcoincore_rpc::Auth::UserPass(btc_config.rpc_user.clone(), btc_config.rpc_pass.clone()),
+    ) {
+        Ok(r) => r,
+        Err(e) => {
+            return Ok(Json(serde_json::json!({
+                "status": "error",
+                "message": format!("bitcoind connection failed: {e}"),
+            })));
+        }
+    };
+
+    use bitcoincore_rpc::RpcApi;
+
+    // Get operator key for pool address
+    let operator_xonly = {
+        let coord = state.coordinator.lock().await;
+        coord.operator_xonly
+    };
+    let pool_address = bitcoin::Address::p2tr_tweaked(
+        bitcoin::key::TweakedPublicKey::dangerous_assume_tweaked(operator_xonly),
+        bitcoin::Network::Regtest,
+    );
+    let pool_script = pool_address.script_pubkey();
+    let deposit_amount = bitcoin::Amount::from_sat(req.amount_sats);
+
+    // Step 1: Mine — ensure wallet has spendable funds
+    let wallet_addr = match rpc.get_new_address(None, None) {
+        Ok(a) => a.assume_checked(),
+        Err(e) => {
+            return Ok(Json(serde_json::json!({
+                "status": "error",
+                "message": format!("get_new_address: {e}"),
+            })));
+        }
+    };
+
+    let balance = rpc.get_balance(None, None).unwrap_or(bitcoin::Amount::ZERO);
+    if balance < deposit_amount + bitcoin::Amount::from_sat(10_000) {
+        if let Err(e) = rpc.generate_to_address(101, &wallet_addr) {
+            return Ok(Json(serde_json::json!({
+                "status": "error",
+                "message": format!("mining failed: {e}"),
+            })));
+        }
+    }
+
+    // Step 2: Deposit — send BTC to pool address
+    let deposit_txid = match rpc.send_to_address(
+        &pool_address, deposit_amount,
+        None, None, None, None, None, None,
+    ) {
+        Ok(txid) => txid,
+        Err(e) => {
+            return Ok(Json(serde_json::json!({
+                "status": "error",
+                "message": format!("send_to_address: {e}"),
+            })));
+        }
+    };
+
+    // Mine to confirm
+    if let Err(e) = rpc.generate_to_address(1, &wallet_addr) {
+        return Ok(Json(serde_json::json!({
+            "status": "error",
+            "message": format!("mining failed: {e}"),
+        })));
+    }
+
+    // Find the deposit output
+    let deposit_tx = match rpc.get_raw_transaction(&deposit_txid, None) {
+        Ok(tx) => tx,
+        Err(e) => {
+            return Ok(Json(serde_json::json!({
+                "status": "error",
+                "message": format!("get deposit tx: {e}"),
+            })));
+        }
+    };
+    let (deposit_vout, deposit_output_amount) = match deposit_tx
+        .output.iter().enumerate()
+        .find(|(_, o)| o.script_pubkey == pool_script)
+        .map(|(i, o)| (i as u32, o.value))
+    {
+        Some(v) => v,
+        None => {
+            return Ok(Json(serde_json::json!({
+                "status": "error",
+                "message": "deposit output to pool address not found in tx",
+            })));
+        }
+    };
+    let deposit_outpoint = bitcoin::OutPoint::new(deposit_txid, deposit_vout);
+
+    // Step 3: Consolidate — merge with existing pool UTXO (if any)
+    let (new_pool_outpoint, new_pool_amount) = {
+        let existing_pool = {
+            let coord = state.coordinator.lock().await;
+            coord.kickoff_outpoint.map(|op| (op, coord.kickoff_output_amount.unwrap_or(bitcoin::Amount::ZERO)))
+        };
+
+        if let Some((old_outpoint, old_amount)) = existing_pool {
+            let fee = bitcoin::Amount::from_sat(200);
+            let new_amount = old_amount + deposit_output_amount - fee;
+
+            let mut tx = bitcoin::Transaction {
+                version: bitcoin::transaction::Version::TWO,
+                lock_time: bitcoin::absolute::LockTime::ZERO,
+                input: vec![
+                    bitcoin::TxIn {
+                        previous_output: old_outpoint,
+                        script_sig: bitcoin::ScriptBuf::new(),
+                        sequence: bitcoin::Sequence::ENABLE_RBF_NO_LOCKTIME,
+                        witness: bitcoin::Witness::new(),
+                    },
+                    bitcoin::TxIn {
+                        previous_output: deposit_outpoint,
+                        script_sig: bitcoin::ScriptBuf::new(),
+                        sequence: bitcoin::Sequence::ENABLE_RBF_NO_LOCKTIME,
+                        witness: bitcoin::Witness::new(),
+                    },
+                ],
+                output: vec![bitcoin::TxOut {
+                    value: new_amount,
+                    script_pubkey: pool_script.clone(),
+                }],
+            };
+
+            // Sign both inputs with operator's MuSig2 key
+            let prevouts = vec![
+                bitcoin::TxOut { value: old_amount, script_pubkey: pool_script.clone() },
+                bitcoin::TxOut { value: deposit_output_amount, script_pubkey: pool_script.clone() },
+            ];
+            {
+                let coord = state.coordinator.lock().await;
+                for i in 0..tx.input.len() {
+                    layer_tree_core::signing::sign_input_musig2(
+                        &mut tx, i, &prevouts,
+                        &coord.key_agg_ctx,
+                        std::slice::from_ref(&coord.secret_key),
+                    );
+                }
+            }
+
+            // Broadcast and mine
+            if let Err(e) = rpc.send_raw_transaction(&tx) {
+                return Ok(Json(serde_json::json!({
+                    "status": "error",
+                    "message": format!("broadcast consolidation tx: {e}"),
+                })));
+            }
+            let _ = rpc.generate_to_address(1, &wallet_addr);
+
+            (bitcoin::OutPoint::new(tx.compute_txid(), 0), new_amount)
+        } else {
+            // No existing pool — this deposit becomes the initial pool UTXO
+            (deposit_outpoint, deposit_output_amount)
+        }
+    };
+
+    // Update coordinator's pool
+    {
+        let mut coord = state.coordinator.lock().await;
+        coord.kickoff_outpoint = Some(new_pool_outpoint);
+        coord.kickoff_output_amount = Some(new_pool_amount);
+        if coord.current_epoch_id == 0 {
+            coord.current_epoch_id = 1;
+        }
+    }
+
+    // Step 4: Send — credit user via ephemeral deposit + transfer
+    let secp = bitcoin::secp256k1::Secp256k1::new();
+    let mut faucet_sk_bytes = [0u8; 32];
+    rand::fill(&mut faucet_sk_bytes);
+    let faucet_keypair = bitcoin::secp256k1::Keypair::from_seckey_slice(&secp, &faucet_sk_bytes)
+        .expect("valid random key");
+    let (faucet_xonly, _) = faucet_keypair.x_only_public_key();
+
+    // DepositConfirm credits the ephemeral faucet account
+    let deposit_op = layer_tree_core::blockchain::Operation::DepositConfirm {
+        pubkey: faucet_xonly,
         amount: req.amount_sats,
-        outpoint,
+        outpoint: deposit_outpoint,
     };
 
-    let mut bp = state.block_producer.lock().await;
-    bp.add_operation(op);
+    // Transfer from faucet account to user (signed with ephemeral key)
+    let nonce = 1u64;
+    let msg = layer_tree_core::blockchain::transfer_message(&user_pk, req.amount_sats, nonce);
+    let sig = secp.sign_schnorr(&msg, &faucet_keypair);
+
+    let transfer_op = layer_tree_core::blockchain::Operation::Transfer {
+        from: faucet_xonly,
+        to: user_pk,
+        amount: req.amount_sats,
+        nonce,
+        signature: layer_tree_core::blockchain::Sig(sig.serialize()),
+    };
+
+    // Both ops go into the same block: deposit first, then transfer
+    {
+        let mut bp = state.block_producer.lock().await;
+        bp.add_operation(deposit_op);
+        bp.add_operation(transfer_op);
+    }
 
     Ok(Json(serde_json::json!({
         "status": "ok",
-        "message": "credit queued as deposit, will be included in next block",
+        "message": format!("Mined block, deposited to pool, credited {} sats", req.amount_sats),
         "pubkey": req.pubkey,
         "amount_sats": req.amount_sats,
+        "pool_outpoint": format!("{}:{}", new_pool_outpoint.txid, new_pool_outpoint.vout),
+        "pool_amount_sats": new_pool_amount.to_sat(),
     })))
 }
 

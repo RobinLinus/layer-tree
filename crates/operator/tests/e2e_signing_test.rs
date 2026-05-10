@@ -38,11 +38,11 @@ async fn test_state_driver_signs_with_funded_users() {
         params.clone(),
     )));
 
-    // Set pool UTXO
+    // Set pool UTXO (large enough for 4 users + operator change + depth-2 fees)
     {
         let mut coord = coordinator.lock().await;
         coord.kickoff_outpoint = Some(OutPoint::new(Txid::from_byte_array([0xDD; 32]), 0));
-        coord.kickoff_output_amount = Some(Amount::from_sat(1_000_000));
+        coord.kickoff_output_amount = Some(Amount::from_sat(10_000_000));
         coord.current_epoch_id = 1;
     }
 
@@ -62,7 +62,7 @@ async fn test_state_driver_signs_with_funded_users() {
         let (xonly, _) = pk.x_only_public_key();
         ops.push(Operation::DepositConfirm {
             pubkey: xonly,
-            amount: 249_875,
+            amount: 100_000,
             outpoint: OutPoint::new(Txid::from_byte_array([200 + i; 32]), 0),
         });
     }
@@ -136,9 +136,9 @@ async fn test_single_operator_immediate_signing() {
         0, 1, secret_key, key_agg_ctx, operator_xonly, params.clone(),
     );
 
-    // Set pool UTXO
+    // Set pool UTXO (large enough for 4 users + operator change + depth-2 fees)
     coordinator.kickoff_outpoint = Some(OutPoint::new(Txid::from_byte_array([0xEE; 32]), 0));
-    coordinator.kickoff_output_amount = Some(Amount::from_sat(1_000_000));
+    coordinator.kickoff_output_amount = Some(Amount::from_sat(10_000_000));
 
     // Create 4 valid user allocations
     let secp = bitcoin::secp256k1::Secp256k1::new();
@@ -151,7 +151,7 @@ async fn test_single_operator_immediate_signing() {
         let (xonly, _) = pk.x_only_public_key();
         allocations.push(layer_tree_core::tree::UserAllocation {
             pubkey: bitcoin::XOnlyPublicKey::from_slice(&xonly.serialize()).unwrap(),
-            amount: Amount::from_sat(249_875),
+            amount: Amount::from_sat(100_000),
         });
     }
 

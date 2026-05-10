@@ -58,7 +58,7 @@
 
       if (data.status === 'ok') {
         el.className = 'result success';
-        el.textContent = `Credited ${data.credited} sats. Balance: ${data.balance_sats} sats`;
+        el.textContent = data.message;
       } else {
         el.className = 'result error';
         el.textContent = data.message || JSON.stringify(data);

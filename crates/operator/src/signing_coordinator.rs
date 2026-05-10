@@ -17,7 +17,21 @@ use layer_tree_core::transactions::{
     build_refresh_with_io, p2tr_script_pubkey, DepositInput, WithdrawalOutput,
 };
 use layer_tree_core::tree::UserAllocation;
-use layer_tree_core::Params;
+use layer_tree_core::{Params, FANOUT};
+
+/// Compute the exit tree depth for `n` leaf allocations.
+fn compute_depth(n: usize) -> usize {
+    if n <= 1 {
+        return 1;
+    }
+    let mut depth = 0;
+    let mut capacity = 1;
+    while capacity < n {
+        capacity *= FANOUT;
+        depth += 1;
+    }
+    depth
+}
 
 /// A pending signing session with all context needed to complete it.
 pub struct ActiveSession {
@@ -78,7 +92,7 @@ impl SigningCoordinator {
         epoch_id: u64,
         state_number: u32,
         nsequence: u16,
-        allocations: Vec<UserAllocation>,
+        mut allocations: Vec<UserAllocation>,
     ) -> Result<Vec<PubNonce>, SigningError> {
         let kickoff_outpoint = self
             .kickoff_outpoint
@@ -86,6 +100,25 @@ impl SigningCoordinator {
         let kickoff_output_amount = self
             .kickoff_output_amount
             .ok_or(SigningError::WrongState("no kickoff output amount set"))?;
+
+        // Add operator change allocation for unallocated pool funds.
+        // The exit tree must account for every satoshi: user balances + operator change + split fees = root output.
+        let root_output_amount = kickoff_output_amount - self.params.root_fee();
+        let user_total: Amount = allocations.iter().map(|a| a.amount).sum();
+
+        let n_with_op = allocations.len() + 1;
+        let depth = compute_depth(n_with_op);
+        let n_split_txs: usize = (0..depth).map(|i| FANOUT.pow(i as u32)).sum();
+        let total_split_fees = self.params.split_fee() * n_split_txs as u64;
+
+        let operator_change = root_output_amount
+            .checked_sub(user_total + total_split_fees)
+            .ok_or(SigningError::WrongState("allocations + fees exceed pool capacity"))?;
+
+        allocations.push(UserAllocation {
+            pubkey: self.operator_xonly,
+            amount: operator_change,
+        });
 
         let (exit_tree, txs, _prevouts, sighashes) = build_state_transactions(
             kickoff_outpoint,

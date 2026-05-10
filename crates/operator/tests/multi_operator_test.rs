@@ -72,7 +72,7 @@ async fn start_operators(n: usize) -> Vec<TestOperator> {
                 Txid::from_byte_array([0xAA; 32]),
                 0,
             ));
-            coord.kickoff_output_amount = Some(Amount::from_sat(1_000_000));
+            coord.kickoff_output_amount = Some(Amount::from_sat(10_000_000));
         }
 
         // Start peer service on random port
@@ -120,14 +120,9 @@ async fn test_three_operator_signing_via_peer_api() {
 
     let secp = bitcoin::secp256k1::Secp256k1::new();
 
-    // Allocations: must satisfy exit tree constraints.
-    // kickoff_output_amount is set to 1_000_000
-    // root_output = 1_000_000 - root_fee(200) = 999_800
-    // exit tree required_input_amount = sum(allocations) + split_fees
-    // With fanout=4 and 4 users, there's 1 split TX: split_fee = 300
-    // So: sum(allocations) = 999_800 - 300 = 999_500
-    // Split across 4 users: 249_875 each
-    let user_amount = 249_875u64;
+    // Allocations: propose_state adds an operator change allocation automatically,
+    // so user allocations don't need to perfectly fill the tree.
+    let user_amount = 100_000u64;
     let mut allocations = Vec::new();
     // We need exactly 4 users for a clean single-level tree (fanout=4)
     for i in 0..4u8 {
