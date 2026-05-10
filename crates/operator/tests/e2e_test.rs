@@ -11,7 +11,7 @@ use serde_json::Value;
 use tokio::sync::Mutex;
 
 use layer_tree_operator::{
-    api, auth, block_producer, config, db, keys, peer_service, signing_coordinator, state_driver,
+    api, block_producer, config, db, keys, peer_service, signing_coordinator, state_driver,
     AppState,
 };
 
@@ -193,7 +193,7 @@ async fn test_e2e_deposit_transfer_withdrawal() {
     let amount = 1000u64;
     let nonce = 1u64;
 
-    let msg = auth::build_transfer_message(&bob_pubkey, amount, nonce);
+    let msg = layer_tree_core::blockchain::transfer_message(&bob_xonly, amount, nonce);
     let sig = secp.sign_schnorr(&msg, &alice_keypair);
     let sig_hex = hex_encode(&sig.serialize());
 
@@ -219,7 +219,7 @@ async fn test_e2e_deposit_transfer_withdrawal() {
     let dest = "512000112233445566778899aabbccddeeff00112233445566778899aabbccddee"; // p2tr script hex
     let w_amount = 5000u64;
     let w_nonce = 1u64;
-    let w_msg = auth::build_withdrawal_message(dest, w_amount, w_nonce);
+    let w_msg = layer_tree_core::blockchain::withdrawal_message(&alice_xonly, w_amount, w_nonce);
     let w_sig = secp.sign_schnorr(&w_msg, &alice_keypair);
     let w_sig_hex = hex_encode(&w_sig.serialize());
 

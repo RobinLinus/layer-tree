@@ -145,7 +145,7 @@ async fn test_transfer_insufficient_balance() {
     let amount = 1000u64;
     let nonce = 0u64;
 
-    let msg = layer_tree_operator::auth::build_transfer_message(&to_hex, amount, nonce);
+    let msg = layer_tree_core::blockchain::transfer_message(&to_xonly, amount, nonce);
     let sig = secp.sign_schnorr(&msg, &keypair);
     let sig_hex = hex_encode(&sig.serialize());
 
@@ -203,7 +203,7 @@ async fn test_deposit_and_withdrawal_flow() {
     let dest_address = "512000112233445566778899aabbccddeeff00112233445566778899aabbccddee"; // p2tr script hex
     let amount = 1000u64;
     let nonce = 0u64;
-    let msg = layer_tree_operator::auth::build_withdrawal_message(dest_address, amount, nonce);
+    let msg = layer_tree_core::blockchain::withdrawal_message(&xonly, amount, nonce);
     let sig = secp.sign_schnorr(&msg, &keypair);
     let sig_hex = hex_encode(&sig.serialize());
 
@@ -249,7 +249,7 @@ async fn test_authenticated_transfer() {
     let nonce = 1u64;
 
     // Sign transfer message
-    let msg = layer_tree_operator::auth::build_transfer_message(&to_hex, amount, nonce);
+    let msg = layer_tree_core::blockchain::transfer_message(&to_xonly, amount, nonce);
     let sig = secp.sign_schnorr(&msg, &keypair);
     let sig_hex = hex_encode(&sig.serialize());
 

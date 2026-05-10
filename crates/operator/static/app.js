@@ -37,18 +37,18 @@ function hexToBytes(hex) {
 
 const textEncode = s => new TextEncoder().encode(s);
 
-// --- Signing (matches auth.rs exactly) ---
-// Transfer:   SHA256(to_pubkey_hex_ascii || amount_le8 || nonce_le8)
-// Withdrawal: SHA256(dest_address_ascii  || amount_le8 || nonce_le8)
+// --- Signing (matches blockchain.rs canonical format) ---
+// Transfer:   SHA256(to_pubkey_32_bytes || amount_le8 || nonce_le8)
+// Withdrawal: SHA256(from_pubkey_32_bytes || amount_le8 || nonce_le8)
 
 async function signTransfer(secret, toHex, amount, nonce) {
-  const msg = concat(textEncode(toHex), uint64LE(amount), uint64LE(nonce));
+  const msg = concat(hexToBytes(toHex), uint64LE(amount), uint64LE(nonce));
   const hash = await sha256(msg);
   return bytesToHex(schnorr.sign(hash, secret));
 }
 
-async function signWithdrawal(secret, destAddress, amount, nonce) {
-  const msg = concat(textEncode(destAddress), uint64LE(amount), uint64LE(nonce));
+async function signWithdrawal(secret, fromPubkeyHex, amount, nonce) {
+  const msg = concat(hexToBytes(fromPubkeyHex), uint64LE(amount), uint64LE(nonce));
   const hash = await sha256(msg);
   return bytesToHex(schnorr.sign(hash, secret));
 }
@@ -183,7 +183,7 @@ document.getElementById('withdraw-btn').addEventListener('click', async () => {
     return showResult('withdraw-result', { status: 'error', message: 'Fill in all fields' });
   }
   const nonce = getNextNonce();
-  const signature = await signWithdrawal(kp.secret, dest, amount, nonce);
+  const signature = await signWithdrawal(kp.secret, kp.pubkey, amount, nonce);
   const result = await apiPost('/api/withdrawal', {
     pubkey: kp.pubkey, amount_sats: amount, dest_address: dest, nonce, signature,
   });
