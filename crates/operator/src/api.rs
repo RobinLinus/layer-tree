@@ -31,6 +31,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/deposit", post(deposit))
         .route("/api/withdrawal", post(withdrawal))
         .route("/api/admin/set_epoch", post(set_epoch))
+        .route("/api/admin/credit", post(credit))
         .fallback_service(ServeDir::new(static_dir()))
         .with_state(state)
 }
@@ -389,6 +390,54 @@ async fn set_epoch(
         "epoch_id": req.epoch_id,
         "outpoint": req.outpoint,
         "amount_sats": req.amount_sats,
+    })))
+}
+
+/// POST /api/admin/credit — regtest faucet: directly credit a pubkey's balance.
+#[derive(serde::Deserialize)]
+struct CreditReq {
+    pubkey: String,
+    amount_sats: u64,
+}
+
+async fn credit(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(req): Json<CreditReq>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if let Err(code) = check_admin_token(&state, &headers) {
+        return Err(code);
+    }
+
+    let pk = match parse_xonly(&req.pubkey) {
+        Ok(pk) => pk,
+        Err(e) => {
+            return Ok(Json(serde_json::json!({
+                "status": "error",
+                "message": format!("invalid pubkey: {e}"),
+            })));
+        }
+    };
+
+    if req.amount_sats == 0 {
+        return Ok(Json(serde_json::json!({
+            "status": "error",
+            "message": "amount must be > 0",
+        })));
+    }
+
+    let new_balance = {
+        let mut cs = state.chain_state.lock().await;
+        let bal = cs.balances.entry(pk).or_insert(0);
+        *bal += req.amount_sats;
+        *bal
+    };
+
+    Ok(Json(serde_json::json!({
+        "status": "ok",
+        "pubkey": req.pubkey,
+        "credited": req.amount_sats,
+        "balance_sats": new_balance,
     })))
 }
 

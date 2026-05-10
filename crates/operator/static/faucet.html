@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Layer Tree Faucet</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Regtest Faucet</h1>
+    <a href="/" style="color:#79c0ff;text-decoration:none;font-size:0.9rem">&larr; Wallet</a>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Credit Sats</h2>
+      <p style="color:#8b949e;font-size:0.85rem;margin-bottom:12px">
+        Directly credit any pubkey with sats. Regtest only.
+      </p>
+      <label>
+        Pubkey (x-only hex):
+        <input type="text" id="pubkey" placeholder="5dcc77e99fefd00b...">
+      </label>
+      <label>
+        Amount (sats):
+        <input type="number" id="amount" value="100000">
+      </label>
+      <button id="credit-btn">Credit</button>
+      <div id="result"></div>
+    </section>
+  </main>
+
+  <script>
+    // Pre-fill pubkey from wallet localStorage if available
+    try {
+      const kp = JSON.parse(localStorage.getItem('layer_tree_keypair'));
+      if (kp && kp.pubkey) document.getElementById('pubkey').value = kp.pubkey;
+    } catch {}
+
+    document.getElementById('credit-btn').addEventListener('click', async () => {
+      const pubkey = document.getElementById('pubkey').value.trim();
+      const amount = parseInt(document.getElementById('amount').value);
+      const el = document.getElementById('result');
+
+      if (!pubkey || !amount) {
+        el.className = 'result error';
+        el.textContent = 'Fill in all fields';
+        return;
+      }
+
+      const res = await fetch('/api/admin/credit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pubkey, amount_sats: amount }),
+      });
+      const data = await res.json();
+
+      if (data.status === 'ok') {
+        el.className = 'result success';
+        el.textContent = `Credited ${data.credited} sats. Balance: ${data.balance_sats} sats`;
+      } else {
+        el.className = 'result error';
+        el.textContent = data.message || JSON.stringify(data);
+      }
+    });
+  </script>
+</body>
+</html>
