@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Layer Tree Wallet</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Layer Tree</h1>
+    <div id="status" class="status disconnected">Disconnected</div>
+  </header>
+
+  <main>
+    <!-- Setup / Key Management -->
+    <section id="setup-section" class="card">
+      <h2>Wallet Setup</h2>
+      <div id="no-key">
+        <p>No keypair found. Generate one to get started.</p>
+        <button id="generate-key-btn">Generate Keypair</button>
+      </div>
+      <div id="has-key" style="display:none">
+        <p><strong>Your public key:</strong></p>
+        <code id="pubkey-display"></code>
+      </div>
+    </section>
+
+    <!-- Dashboard -->
+    <section id="dashboard-section" class="card" style="display:none">
+      <h2>Balance</h2>
+      <div class="balance-display">
+        <span id="balance-amount">0</span> <span class="unit">sats</span>
+      </div>
+      <button id="refresh-balance-btn">Refresh</button>
+    </section>
+
+    <!-- Send -->
+    <section id="send-section" class="card" style="display:none">
+      <h2>Send</h2>
+      <label>
+        Recipient (x-only pubkey hex):
+        <input type="text" id="send-to" placeholder="32-byte hex pubkey">
+      </label>
+      <label>
+        Amount (sats):
+        <input type="number" id="send-amount" placeholder="10000">
+      </label>
+      <button id="send-btn">Send</button>
+      <div id="send-result"></div>
+    </section>
+
+    <!-- Deposit -->
+    <section id="deposit-section" class="card" style="display:none">
+      <h2>Deposit</h2>
+      <p>Send BTC to the pool and register your deposit:</p>
+      <label>
+        Outpoint (txid:vout):
+        <input type="text" id="deposit-outpoint" placeholder="txid:0">
+      </label>
+      <label>
+        Amount (sats):
+        <input type="number" id="deposit-amount" placeholder="50000">
+      </label>
+      <button id="deposit-btn">Register Deposit</button>
+      <div id="deposit-result"></div>
+    </section>
+
+    <!-- Withdraw -->
+    <section id="withdraw-section" class="card" style="display:none">
+      <h2>Withdraw</h2>
+      <label>
+        Destination script (hex):
+        <input type="text" id="withdraw-address" placeholder="512000112233...">
+      </label>
+      <label>
+        Amount (sats):
+        <input type="number" id="withdraw-amount" placeholder="10000">
+      </label>
+      <button id="withdraw-btn">Request Withdrawal</button>
+      <div id="withdraw-result"></div>
+    </section>
+
+    <!-- Info -->
+    <section id="info-section" class="card">
+      <h2>Operator Info</h2>
+      <pre id="operator-info">Loading...</pre>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

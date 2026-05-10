@@ -1,0 +1,46 @@
+[package]
+name = "layer-tree-operator"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "layer_tree_operator"
+path = "src/lib.rs"
+
+[[bin]]
+name = "operator"
+path = "src/main.rs"
+
+[dependencies]
+layer-tree-core = { path = "../core" }
+
+# Networking
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Database
+rusqlite = { version = "0.33", features = ["bundled"] }
+
+# Crypto
+bitcoin = { version = "0.32.8", features = ["serde"] }
+musig2 = "0.3.1"
+
+# HTTP client (for peer communication)
+reqwest = { version = "0.12", features = ["json"] }
+
+# Bitcoin RPC
+bitcoincore-rpc = "0.19.0"
+
+# Utilities
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rand = "0.10"
+
+[dev-dependencies]
+tempfile = "3"

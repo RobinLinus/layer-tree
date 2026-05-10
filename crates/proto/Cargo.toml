@@ -1,0 +1,8 @@
+[package]
+name = "layer-tree-proto"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+prost = "0.14"
+tonic = "0.14"

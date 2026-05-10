@@ -1,0 +1,111 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0d1117;
+  color: #c9d1d9;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid #21262d;
+  margin-bottom: 16px;
+}
+
+h1 { color: #f0f6fc; font-size: 1.5rem; }
+h2 { color: #f0f6fc; font-size: 1.1rem; margin-bottom: 12px; }
+
+.status {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.status.connected { background: #238636; color: #fff; }
+.status.disconnected { background: #da3633; color: #fff; }
+
+.card {
+  background: #161b22;
+  border: 1px solid #21262d;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.balance-display {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #f0f6fc;
+  margin: 8px 0;
+}
+.unit { font-size: 1rem; color: #8b949e; }
+
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+  color: #8b949e;
+}
+
+input {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  margin-top: 4px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  color: #c9d1d9;
+  font-size: 0.9rem;
+}
+
+button {
+  background: #238636;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  margin-top: 8px;
+}
+button:hover { background: #2ea043; }
+
+code {
+  display: block;
+  background: #0d1117;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  word-break: break-all;
+  color: #79c0ff;
+}
+
+pre {
+  background: #0d1117;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  overflow-x: auto;
+}
+
+.result {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+.result.success { background: #0d2818; color: #3fb950; border: 1px solid #238636; }
+.result.error { background: #2d1b1b; color: #f85149; border: 1px solid #da3633; }
+
+#send-result, #deposit-result, #withdraw-result {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: #8b949e;
+}

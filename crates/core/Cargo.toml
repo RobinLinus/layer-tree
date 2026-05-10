@@ -1,0 +1,27 @@
+[package]
+name = "layer-tree-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bitcoin = { version = "0.32.8", features = ["serde"] }
+bitcoincore-rpc = "0.19.0"
+musig2 = "0.3.1"
+rand = "0.10.1"
+serde = { version = "1", features = ["derive"] }
+
+[[bin]]
+name = "regtest_demo"
+path = "src/bin/regtest_demo.rs"
+
+[[bin]]
+name = "stale_state_demo"
+path = "src/bin/stale_state_demo.rs"
+
+[[bin]]
+name = "lifecycle_demo"
+path = "src/bin/lifecycle_demo.rs"
+
+[[bin]]
+name = "deposit_withdraw_demo"
+path = "src/bin/deposit_withdraw_demo.rs"

@@ -1,0 +1,69 @@
+# Layer Tree Prototype: 3-operator setup on regtest
+#
+# Usage:
+#   1. Generate operator keys:  ./scripts/gen_keys.sh
+#   2. Start:                    docker compose up -d
+#   3. Fund pool:                ./scripts/fund_pool.sh
+#   4. Open wallet:              http://localhost:8080
+
+services:
+  bitcoind:
+    image: ruimarinho/bitcoin-core:24
+    command:
+      - -regtest
+      - -server
+      - -rpcuser=rpcuser
+      - -rpcpassword=rpcpassword
+      - -rpcallowip=0.0.0.0/0
+      - -rpcbind=0.0.0.0
+      - -txindex=1
+      - -fallbackfee=0.00001
+    ports:
+      - "18443:18443"
+    volumes:
+      - bitcoin-data:/home/bitcoin/.bitcoin
+
+  operator-0:
+    build: .
+    command: ["/config/operator-0.toml"]
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    volumes:
+      - ./deploy/config:/config
+      - ./deploy/keys:/keys
+      - op0-data:/data
+    depends_on:
+      - bitcoind
+
+  operator-1:
+    build: .
+    command: ["/config/operator-1.toml"]
+    ports:
+      - "8081:8080"
+      - "50052:50051"
+    volumes:
+      - ./deploy/config:/config
+      - ./deploy/keys:/keys
+      - op1-data:/data
+    depends_on:
+      - bitcoind
+
+  operator-2:
+    build: .
+    command: ["/config/operator-2.toml"]
+    ports:
+      - "8082:8080"
+      - "50053:50051"
+    volumes:
+      - ./deploy/config:/config
+      - ./deploy/keys:/keys
+      - op2-data:/data
+    depends_on:
+      - bitcoind
+
+volumes:
+  bitcoin-data:
+  op0-data:
+  op1-data:
+  op2-data:

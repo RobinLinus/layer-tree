@@ -1,0 +1,117 @@
+syntax = "proto3";
+package layer_tree;
+
+/// Operator-to-operator communication for distributed MuSig2 signing.
+/// Leader (signer_index=0) drives signing. Other operators validate and respond.
+service PeerService {
+  /// Initial handshake to verify operator identity and establish connection.
+  rpc Handshake(HandshakeReq) returns (HandshakeResp);
+
+  /// Leader proposes a new state. Peer validates allocations, builds identical
+  /// unsigned transactions, creates a SigningSession, and returns nonces.
+  rpc ProposeState(ProposeStateReq) returns (ProposeStateResp);
+
+  /// Leader distributes collected nonces from all signers.
+  /// Peer feeds nonces into its session and returns partial signatures.
+  rpc SubmitNonces(SubmitNoncesReq) returns (SubmitNoncesResp);
+
+  /// Leader distributes collected partial signatures from all signers.
+  /// Peer feeds them in to complete signing.
+  rpc SubmitPartialSigs(SubmitPartialSigsReq) returns (SubmitPartialSigsResp);
+
+  /// Leader proposes a cooperative refresh (new epoch).
+  /// Peer returns nonces for signing the refresh transaction.
+  rpc ProposeRefresh(ProposeRefreshReq) returns (ProposeRefreshResp);
+}
+
+// --- Handshake ---
+
+message HandshakeReq {
+  uint32 signer_index = 1;
+  bytes pubkey = 2;  // 33-byte compressed public key
+}
+
+message HandshakeResp {
+  bool accepted = 1;
+  uint32 signer_index = 2;
+  bytes pubkey = 3;
+}
+
+// --- State Signing (2-round MuSig2) ---
+
+message Allocation {
+  bytes pubkey = 1;       // 32-byte x-only public key
+  uint64 amount_sats = 2;
+}
+
+message ProposeStateReq {
+  bytes session_id = 1;   // 32-byte random session identifier
+  uint64 epoch_id = 2;
+  uint32 state_number = 3;
+  uint32 nsequence = 4;
+  repeated Allocation allocations = 5;
+}
+
+message ProposeStateResp {
+  bool accepted = 1;
+  string reject_reason = 2;
+  repeated bytes pub_nonces = 3;  // 66 bytes each, one per transaction
+}
+
+message SignerNonces {
+  uint32 signer_index = 1;
+  repeated bytes pub_nonces = 2;  // 66 bytes each
+}
+
+message SubmitNoncesReq {
+  bytes session_id = 1;
+  repeated SignerNonces signer_nonces = 2;
+}
+
+message SubmitNoncesResp {
+  bool accepted = 1;
+  string reject_reason = 2;
+  repeated bytes partial_sigs = 3;  // 32 bytes each, one per transaction
+}
+
+message SignerPartialSigs {
+  uint32 signer_index = 1;
+  repeated bytes partial_sigs = 2;  // 32 bytes each
+}
+
+message SubmitPartialSigsReq {
+  bytes session_id = 1;
+  repeated SignerPartialSigs signer_partial_sigs = 2;
+}
+
+message SubmitPartialSigsResp {
+  bool accepted = 1;
+  string reject_reason = 2;
+}
+
+// --- Cooperative Refresh ---
+
+message DepositInput {
+  bytes txid = 1;         // 32 bytes
+  uint32 vout = 2;
+  uint64 amount_sats = 3;
+  bytes script_pubkey = 4;
+}
+
+message WithdrawalOutput {
+  bytes script_pubkey = 1;
+  uint64 amount_sats = 2;
+}
+
+message ProposeRefreshReq {
+  bytes session_id = 1;
+  uint64 epoch_id = 2;
+  repeated DepositInput deposits = 3;
+  repeated WithdrawalOutput withdrawals = 4;
+}
+
+message ProposeRefreshResp {
+  bool accepted = 1;
+  string reject_reason = 2;
+  repeated bytes pub_nonces = 3;  // nonces for refresh tx signing
+}
