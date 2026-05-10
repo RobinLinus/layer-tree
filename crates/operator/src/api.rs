@@ -397,7 +397,8 @@ async fn set_epoch(
     })))
 }
 
-/// POST /api/admin/credit — regtest faucet: directly credit a pubkey's balance.
+/// POST /api/admin/credit — regtest faucet: create a DepositConfirm operation
+/// that goes through the block producer, so it's persisted in the chain.
 #[derive(serde::Deserialize)]
 struct CreditReq {
     pubkey: String,
@@ -430,18 +431,30 @@ async fn credit(
         })));
     }
 
-    let new_balance = {
-        let mut cs = state.chain_state.lock().await;
-        let bal = cs.balances.entry(pk).or_insert(0);
-        *bal += req.amount_sats;
-        *bal
+    // Create a fake outpoint for the faucet deposit (unique per call)
+    let fake_txid = {
+        use bitcoin::hashes::{sha256, Hash};
+        let seed = format!("faucet:{}:{}", req.pubkey, std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos());
+        let hash = sha256::Hash::hash(seed.as_bytes());
+        bitcoin::Txid::from_byte_array(hash.to_byte_array())
     };
+    let outpoint = bitcoin::OutPoint::new(fake_txid, 0);
+
+    let op = layer_tree_core::blockchain::Operation::DepositConfirm {
+        pubkey: pk,
+        amount: req.amount_sats,
+        outpoint,
+    };
+
+    let mut bp = state.block_producer.lock().await;
+    bp.add_operation(op);
 
     Ok(Json(serde_json::json!({
         "status": "ok",
+        "message": "credit queued as deposit, will be included in next block",
         "pubkey": req.pubkey,
-        "credited": req.amount_sats,
-        "balance_sats": new_balance,
+        "amount_sats": req.amount_sats,
     })))
 }
 
