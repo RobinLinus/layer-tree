@@ -1,8 +1,6 @@
 # Layer Tree
 
-A Bitcoin L2 prototype with multi-operator MuSig2 exit tree signing.
-
-Users deposit BTC into a shared UTXO managed by N operators. Balances are tracked off-chain via an operator blockchain. Users can transfer instantly and withdraw back to L1 cooperatively.
+A Bitcoin L2 prototype. Users deposit BTC into a shared UTXO managed by N operators. Balances are tracked off-chain via an operator blockchain. Transfers are instant. Withdrawals are cooperative by default, but every user can always exit unilaterally: operators continuously sign an exit tree that pre-commits each user's balance to an on-chain output they can claim at any time without operator cooperation.
 
 ## Architecture
 
