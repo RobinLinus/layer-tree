@@ -288,20 +288,24 @@ async fn withdrawal(
         }
     }
 
-    // Parse dest_address (hex-encoded script)
-    let dest_script = match hex_decode(&req.dest_address) {
-        Ok(bytes) if !bytes.is_empty() => bitcoin::ScriptBuf::from_bytes(bytes),
-        Ok(_) => {
-            return Json(serde_json::json!({
-                "status": "error",
-                "message": "dest_address cannot be empty",
-            }));
-        }
-        Err(e) => {
-            return Json(serde_json::json!({
-                "status": "error",
-                "message": format!("invalid dest_address: {e}"),
-            }));
+    // Parse dest_address: try as bitcoin address first, fall back to hex script
+    let dest_script = if let Ok(addr) = req.dest_address.parse::<bitcoin::Address<bitcoin::address::NetworkUnchecked>>() {
+        addr.assume_checked().script_pubkey()
+    } else {
+        match hex_decode(&req.dest_address) {
+            Ok(bytes) if !bytes.is_empty() => bitcoin::ScriptBuf::from_bytes(bytes),
+            Ok(_) => {
+                return Json(serde_json::json!({
+                    "status": "error",
+                    "message": "dest_address cannot be empty",
+                }));
+            }
+            Err(e) => {
+                return Json(serde_json::json!({
+                    "status": "error",
+                    "message": format!("invalid dest_address: {e}"),
+                }));
+            }
         }
     };
 
