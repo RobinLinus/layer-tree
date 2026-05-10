@@ -1,5 +1,5 @@
-// Layer Tree Wallet — BIP-340 Schnorr signing via @noble/secp256k1
-import * as secp from 'https://esm.sh/@noble/secp256k1@2.1.0';
+// Layer Tree Wallet — BIP-340 Schnorr signing via @noble/curves
+import { schnorr } from 'https://esm.sh/@noble/curves@1.8.2/secp256k1';
 
 const API = '';  // Same origin
 
@@ -44,13 +44,13 @@ const textEncode = s => new TextEncoder().encode(s);
 async function signTransfer(secret, toHex, amount, nonce) {
   const msg = concat(textEncode(toHex), uint64LE(amount), uint64LE(nonce));
   const hash = await sha256(msg);
-  return bytesToHex(secp.schnorr.sign(hash, secret));
+  return bytesToHex(schnorr.sign(hash, secret));
 }
 
 async function signWithdrawal(secret, destAddress, amount, nonce) {
   const msg = concat(textEncode(destAddress), uint64LE(amount), uint64LE(nonce));
   const hash = await sha256(msg);
-  return bytesToHex(secp.schnorr.sign(hash, secret));
+  return bytesToHex(schnorr.sign(hash, secret));
 }
 
 // --- Key Management (localStorage) ---
@@ -63,8 +63,8 @@ function getKeypair() {
 }
 
 function generateKeypair() {
-  const secret = secp.utils.randomPrivateKey();
-  const pubkey = bytesToHex(secp.schnorr.getPublicKey(secret));
+  const secret = schnorr.utils.randomPrivateKey();
+  const pubkey = bytesToHex(schnorr.getPublicKey(secret));
   localStorage.setItem('layer_tree_keypair', JSON.stringify({
     secret: bytesToHex(secret),
     pubkey,
